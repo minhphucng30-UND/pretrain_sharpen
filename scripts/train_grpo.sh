@@ -13,14 +13,17 @@ module load cuda/12.1
 export VLLM_DISABLE_COMPILE_CACHE=1
 datasets=(gsm8k)
 types=(constant)
-lr=1e-7
+lr=1e-6
 # rollout_ns=(512 1024 2048 4096 8192)
-rollout_ns=(16 32 64 128 256 512 1024 2048 4096 8192)
+pretrain_lrs=(6e4 1e3 3e3)
+rollout_ns=(64 128 256 512 1024 2048 4096 8192)
+rollout_ns=(16)
 
 for dataset in "${datasets[@]}";do
 for type in "${types[@]}";do
+for pretrain_lr in "${pretrain_lrs[@]}";do
 for rollout_n in "${rollout_ns[@]}";do
-model_name=OLMo-150M-${type}
+model_name=OLMo-150M-${type}-${pretrain_lr}
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=reinforce_plus_plus_baseline \
@@ -68,7 +71,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb']\
     trainer.project_name='Pretrain-sharpen' \
-    trainer.experiment_name=${model_name}-${dataset}-step60000-rollout${rollout_n}\
+    trainer.experiment_name=${model_name}-${dataset}-step60000-${pretrain_lr}\
     reward_model.reward_manager=simple_math \
     trainer.n_gpus_per_node=4 \
     trainer.val_before_train=false \
@@ -78,6 +81,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.total_training_steps=1024\
     trainer.total_epochs=25000 $@
 
+done
 done
 done
 done
