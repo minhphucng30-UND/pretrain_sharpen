@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -c 8 # request two cores 
 #SBATCH -p kisski-h100,kisski
-#SBATCH -o log/train_grpo_rollout_mix32.out
-#SBATCH -e log/error-train_grpo_rollout_mix32.out
+#SBATCH -o log/train_grpo_rollout2.out
+#SBATCH -e log/error-train_grpo_rollout2.out
 #SBATCH --mem=96G
 #SBATCH --time=48:00:00
-#SBATCH --job-name=train_grpo_rollout_mix32
+#SBATCH --job-name=train_grpo_rollout2
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH -G A100:4
@@ -13,11 +13,9 @@
 export VLLM_DISABLE_COMPILE_CACHE=1
 source ~/.bashrc
 conda activate prm_rlvr
-datasets=(gsm8k mix)
-types=(constant constant-6e4 constant-1e3 constant-3e3 cosine)
-# types=(constant-3e3)
-lrs=(3e-6 5e-6)
-# rollout_ns=(64 128 256 512 1024 2048 4096 8192)
+datasets=(gsm8k)
+types=(constant-1e3)
+lrs=(1e-3)
 rollout_ns=(16)
 
 for dataset in "${datasets[@]}";do
@@ -38,10 +36,11 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=20480 \
     actor_rollout_ref.ref.strategy=fsdp2 \
     actor_rollout_ref.actor.strategy=fsdp2 \
+    +actor_rollout_ref.actor.use_sam=true \
     data.truncation=right \
     actor_rollout_ref.model.path=OLMo-150M/${model_name} \
     actor_rollout_ref.actor.optim.lr=${lr} \
-    actor_rollout_ref.actor.optim.optim_name='AdamW' \
+    actor_rollout_ref.actor.optim.optim_name='SAM' \
     actor_rollout_ref.model.use_remove_padding=true \
     actor_rollout_ref.actor.use_dynamic_bsz=true \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
@@ -69,7 +68,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb']\
     trainer.project_name='Pretrain-sharpen' \
-    trainer.experiment_name=${model_name}-${dataset}-step60000-rollout${rollout_n}-lr${lr}\
+    trainer.experiment_name=${model_name}-${dataset}-step60000-rollout${rollout_n}-lr${lr}-sam\
     reward_model.reward_manager=simple_math \
     trainer.n_gpus_per_node=4 \
     trainer.val_before_train=false \
