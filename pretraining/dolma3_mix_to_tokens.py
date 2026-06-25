@@ -1,7 +1,8 @@
 """Tokenize the math subset of Dolma 3 Dolmino Mix to ~10B tokens.
 
-Only the five official math (synth) sources are included. Each is subsampled
-uniformly to preserve their relative proportions within the math subset.
+Four of the official math (synth) sources are included (Dolmino Math is
+excluded). Each is subsampled uniformly to preserve their relative proportions
+within the math subset.
 
 Run one job per source (recommended on SLURM), then optionally merge the shards.
 
@@ -16,11 +17,11 @@ from pathlib import Path
 
 from datatrove.executor.local import LocalPipelineExecutor
 from datatrove.pipeline.filters import SamplerFilter
-from datatrove.pipeline.readers import HuggingFaceDatasetReader
+from datatrove.pipeline.readers import JsonlReader
 from datatrove.pipeline.tokens import DocumentTokenizer, DocumentTokenizerMerger
 
 DATASET_NAME = "dolma3-dolmino-math-10B"
-HF_DATASET = "allenai/dolma3_dolmino_mix-100B-1025"
+HF_PATH = "hf://datasets/allenai/dolma3_dolmino_mix-100B-1025"
 TOKENIZER = "meta-llama/Llama-2-7b-hf"
 EOS_TOKEN = "</s>"
 SEED = 42
@@ -28,15 +29,25 @@ TOTAL_MIX_TOKENS = 10_000_000_000
 
 # Math (synth) sources from the official 100B mix.
 # token_count values are from the dataset card (used to compute subsample rate).
+# hf_dir is the actual directory name under data/ in the HF repo (note hyphens).
 DOLMA3_MATH_SOURCES = {
-    "cranemath": {"mix_pct": 5.63, "token_count": 5_620_000_000},
-    "megamatt": {"mix_pct": 1.73, "token_count": 1_730_000_000},
-    "tinyMATH_mind": {"mix_pct": 0.9, "token_count": 898_000_000},
-    "tinyMATH_pot": {"mix_pct": 0.24, "token_count": 241_000_000},
+    "cranemath": {"hf_dir": "cranemath", "mix_pct": 5.63, "token_count": 5_620_000_000},
+    "megamatt": {"hf_dir": "megamatt", "mix_pct": 1.73, "token_count": 1_730_000_000},
+    "tinyMATH_mind": {"hf_dir": "tinyMATH-mind", "mix_pct": 0.9, "token_count": 898_000_000},
+    "tinyMATH_pot": {"hf_dir": "tinyMATH-pot", "mix_pct": 0.24, "token_count": 241_000_000},
 }
 
 MATH_SUBSET_TOKENS = sum(cfg["token_count"] for cfg in DOLMA3_MATH_SOURCES.values())
 SAMPLE_RATE = min(1.0, TOTAL_MIX_TOKENS / MATH_SUBSET_TOKENS)
+
+
+def default_adapter(self, data: dict, path: str, id_in_file: int | str):
+    return {
+        "text": data.pop(self.text_key, ""),
+        "id": data.pop(self.id_key, f"{path}/{id_in_file}"),
+        "media": [],
+        "metadata": {},
+    }
 
 
 def _slurm_task_layout() -> tuple[int, int, int]:
@@ -64,12 +75,13 @@ def _tokenize_source(
         f"(100B math share: {cfg['mix_pct']}%, ~{cfg['token_count'] * SAMPLE_RATE / 1e9:.2f}B tokens)"
     )
 
-    reader = HuggingFaceDatasetReader(
-        HF_DATASET,
-        dataset_options={"name": source, "split": "train"},
-        streaming=True,
+    reader = JsonlReader(
+        HF_PATH,  # read directly from huggingface
+        glob_pattern=f"data/{cfg['hf_dir']}/*.jsonl.zst",
+        compression="zstd",
         text_key="text",
         id_key="id",
+        adapter=default_adapter,
     )
 
     dist_executor = LocalPipelineExecutor(
@@ -81,7 +93,7 @@ def _tokenize_source(
                 save_filename=source,
                 tokenizer_name_or_path=tokenizer,
                 eos_token=eos_token,
-                shuffle=True,
+                shuffle_documents=True,
                 seed=seed,
             ),
         ],
@@ -126,7 +138,7 @@ def _merge_tokenized_sources(destination: str, seed: int) -> None:
                 input_folder=str(staging_dir),
                 output_folder=str(merged_dir),
                 save_filename=DATASET_NAME,
-                shuffle=True,
+                shuffle_documents=True,
                 seed=seed,
             ),
         ],
