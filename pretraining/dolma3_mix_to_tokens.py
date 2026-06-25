@@ -33,8 +33,8 @@ TOTAL_MIX_TOKENS = 10_000_000_000
 DOLMA3_MATH_SOURCES = {
     "cranemath": {"hf_dir": "cranemath", "mix_pct": 5.63, "token_count": 5_620_000_000},
     "megamatt": {"hf_dir": "megamatt", "mix_pct": 1.73, "token_count": 1_730_000_000},
-    "tinyMATH_mind": {"hf_dir": "tinyMATH-mind", "mix_pct": 0.9, "token_count": 898_000_000},
-    "tinyMATH_pot": {"hf_dir": "tinyMATH-pot", "mix_pct": 0.24, "token_count": 241_000_000},
+    "tinyMATH_mind": {"hf_dir": "tinymath-mind", "mix_pct": 0.9, "token_count": 898_000_000},
+    "tinyMATH_pot": {"hf_dir": "tinymath-pot", "mix_pct": 0.24, "token_count": 241_000_000},
 }
 
 MATH_SUBSET_TOKENS = sum(cfg["token_count"] for cfg in DOLMA3_MATH_SOURCES.values())
